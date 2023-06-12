@@ -1,0 +1,46 @@
+main
+	for mod in mods:
+		load mod
+
+	once per second:
+		if (lump is ripe and not meaty) or (lump is mature and meaty):
+			harvest lump
+		for each shimmer:
+			click shimmer
+		if can click crumblor:
+			click crumblor
+		if not veil:
+			click cookie
+		for each stock in stocks:
+			if stock == $1:
+				buy max of stock
+			else if stock < $7.01:
+				buy 1 of stock
+
+		for each this in garden:
+			if (is meddleweed and need (meddleweed or crumbspore or brown mold) and is dying):
+				harvest this
+				plant meddleweed
+			else if (is (shriekbulb or brown mold) and not (need this)):
+				harvest this
+			else if (need this and is mature):
+				harvest this
+		
+		if not bingo:
+			if (not frenzy and ((cheapest building < cps) or ((cheapest building + bank) > cps * 100 * 60))):
+				buy 1x of cheapest building
+		else if bingo:
+			if ((sum of buildings % 10 == 0) and rigidel):
+				if ((ten of cheapest building < cps) or ((ten of cheapest building + bank) > cps * 100 * 60 * 7)):
+					buy 10x of cheapest building
+			else:
+				if ((cheapest building < cps) or ((cheapest building + bank) > cps * 100 * 60 * 7)):
+					buy 1x of cheapest building
+			if (((current research + bank) > cps * 100 * 60) and (not brainsweep)):
+				buy research
+			
+		if ((cheapest upgrade < cps) or ((cheapest upgrade + bank) > cps * 100 * 60 * 7)):
+			buy cheapest upgrade  
+		
+		if (mana == max mana):
+			cast FTHoF
