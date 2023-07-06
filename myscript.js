@@ -1,91 +1,77 @@
 function calculatePaybackPeriod(building) {
-	// use the Cookie Monster payback period calculation
+	cost = building.price
+	delta = Math.max(building.storedCps,0.1)
+	bank = Game.cookies
+	cps = Math.max(Game.cookiesPsRaw,0.1)
+	payback = Math.max((cost-bank),0)/cps + cost/delta
+	return payback
 }
 
-
 function determineNextPurchase() {
-	var buildings = [];
+	var byPayback = []
 	Game.ObjectsById.forEach(function(building){
-		buildings.push({id: building.id, price: building.price, amount: building.amount, payback: calculatePaybackPeriod(building)})
+		byPayback.push({name: building.name, id: building.id, price: building.price, payback: calculatePaybackPeriod(building)})
 	})
-	// building A is lowest payback period
-	// building B is cheapest building with 0 built
-	// return id of cheaper of A or B
-	if (count.price < payback.price) {
-		return count.id
-	} else if (count.price >= payback.price) {
-		return payback.id
-	} else {
-		console.log("Called determineNextPurchase, but function is incomplete.")
-		return -1
-	}
+	byPayback.sort(function compareFn(a, b) {
+		return a.payback - b.payback
+	})
+	console.log(byPayback[0])
+	return byPayback[0].id
 }
 
 nextBuilding = determineNextPurchase()
 
-function unbankedSmarterBuyBuilding(building) {
+function unbankedBuyBuilding(building) {
 	if (Game.cookies > building.price) {
-		Game.ObjectsById[building.id].buy()
-		return building.id
-	} else {
+		building.buy()
 		return determineNextPurchase()
+	} else {
+		return building.id
 	}
 }
 
-function bankedSmarterBuyBuilding(bankValue, target, building) {
-	if((building.price < Game.cookiesPs) || ((building.amount == 0) && (Game.cookies > building.price)) || ((bankValue - building.price) > (target))) {
-		Game.ObjectsById[building.id].buy()
-		return building.id
-	} else {
+function bankedBuyBuilding(bankValue, target, building) {
+	if((bankValue - building.price) > target) {
+		building.buy()
 		return determineNextPurchase()
+	} else {
+		return building.id
 	}
-}
-
-function unbankedBuyBuilding(){
-	var buildings = [];
-	Game.ObjectsById.forEach(function(building){
-		if((building.price < Game.cookiesPs) || (Game.cookies > building.price)) {
-			buildings.push({id: building.id, price: building.price});
-		}});
-	if(buildings.length > 0) Game.ObjectsById[buildings.sort(function(a, b){return a.price-b.price})[0].id].buy();
-}
-
-function bankedBuyBuilding(bankValue, target) {
-	var buildings = [];
-	Game.ObjectsById.forEach(function(building){
-		if((building.price < Game.cookiesPs) || ((building.amount == 0) && (Game.cookies > building.price)) || ((bankValue - building.price) > (target)))
-			buildings.push({id: building.id, price: building.price});
-	});
-	if(buildings.length > 0) Game.ObjectsById[buildings.sort(function(a, b){return a.price-b.price})[0].id].buy();
 }
 
 function logic_loop()
 {
-	if (Game.cookiesPsRawHighest == 0) {
-		liquidAssets = 0
-	} else {
-		liquidAssets = Game.cookies / Game.cookiesPsRawHighest
-	}
 	luckyValue = Game.cookies * 0.15
 	luckyBankTarget = Game.cookiesPsRawHighest * 60 * 15
 	frenzyBankTarget = luckyBankTarget * 7
 	
+	thisBuilding = Game.ObjectsById[nextBuilding]
+
 	Game.shimmers.forEach(function(shimmer) {
 		shimmer.pop()
 	})
-	if (Game.Upgrades["Shimmering veil [on]"].bought == 1) {
+	
+	// click if won Neverclick and veil is inactive
+	/*
+	 *
+	 *
+	 */
+
+	// temporary workaround: click unless clicked 15 times this session
+	if !(Game.clicksThisSession == 15) {
 		Game.ClickCookie()
-	}
+	} 
+	
 	if ((Game.Upgrades["Lucky day"].bought == 0) && (Game.Upgrades["Serendipity"].bought == 0)) {
 		if (Game.hasBuff('Frenzy') == 0) {
-			unbankedBuyBuilding()
+			nextBuilding = unbankedBuyBuilding(thisBuilding)
 		}
 	} else {
 		if (Game.Upgrades["One mind"].bought == 0) {
-			bankedBuyBuilding(luckyValue, luckyBankTarget)
+			nextBuilding = bankedBuyBuilding(luckyValue, luckyBankTarget, thisBuilding)
 		}
 		else {
-			bankedBuyBuilding(luckyValue, frenzyBankTarget)
+			nextBuilding = bankedBuyBuilding(luckyValue, frenzyBankTarget, thisBuilding)
 		}
 	}
 }
