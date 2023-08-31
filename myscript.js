@@ -46,11 +46,18 @@ function calculateBankOffset() {
 }
 
 function calculateUpgradePayback(upgrade) {
-	return "This function is undefined."
+	// this function is not yet properly implemented
+	// need to see if I can pull the delta directly from the game
+	// if I can't pull the delta directly from the game, then stick with this approximation
+	return (Math.max(upgrade.basePrice - Game.cookies, 0) / Game.cookiesPsRaw)
 }
 
 function convertSecondsToClock(seconds) {
 	seconds = Math.max(seconds, 0)
+	if (seconds == NaN) {
+		output = "not calculable"
+		return output
+	}
 	sec = (seconds % 60).toString().padStart(2,"0")
 	min = Math.max(Math.floor(seconds/60) % 60,0).toString().padStart(2,"0")
 	hou = Math.max(Math.floor(seconds/3600) % 24,0).toString().padStart(2,"0")
@@ -70,7 +77,7 @@ function determineNextUpgrade() {
 	var availableUpgrades = []
 	Game.UpgradesInStore.forEach(function(upgrade){
 		if (upgradeIsEligible(upgrade)) {
-			availableUpgrades.push({name: upgrade.name, id: upgrade.id, price: upgrade.basePrice, buy: upgrade.buy})
+			availableUpgrades.push({name: upgrade.name, id: upgrade.id, price: upgrade.basePrice, payback: calculateUpgradePayback(upgrade)})
 		}
 	})
 
@@ -80,7 +87,7 @@ function determineNextUpgrade() {
 		})
 		return availableUpgrades[0]
 	} else {
-		return "Failure state: no upgrades available"
+		return -1
 	}
 }
 
@@ -127,7 +134,10 @@ function determineNextPurchase() {
 	building = determineNextBuilding()
 	if ((Game.UpgradesOwned > 0) || (Game.Achievements['Hardcore'].won == 1)) {
 		upgrade = determineNextUpgrade()
-		if (upgrade.price < building.price) {
+		if (upgrade == -1) {
+			reportNextPurchase(building)
+			return Game.ObjectsById[building.id]
+		} else if (upgrade.price < building.price) {
 			reportNextPurchase(upgrade)
 			return Game.UpgradesById[upgrade.id]
 		} else {
@@ -142,29 +152,41 @@ function determineNextPurchase() {
 
 nextItem = determineNextPurchase()
 
-function unbankedBuy(item) {
-	if (Game.cookies >= item.price) {
-		item.buy()
+function bankedBuy(bankValue, item) {
+	target = calculateBankOffset()
+	if (item.price == undefined) {
+		price = item.basePrice
+	} else {
+		price = item.price
+	}
+	if((bankValue - price) >= target) {
+		try {
+			item.click()
+		} catch {
+			item.buy()
+		}
 		return determineNextPurchase()
 	} else {
 		return item
 	}
 }
 
-function bankedBuy(bankValue, target, item) {
-	if((bankValue - item.price) >= target) {
-		item.buy()
-		return determineNextPurchase()
-	} else {
-		return item
+function getMaxWrinklerCount() {
+	output = 10
+	// if prestige upgrade
+	if (true) {
+		output = output + 2
 	}
+	// if You aura
+	if (false) {
+		output = output + 2
+	}
+	return output
 }
 
 function logic_loop()
 {
 	luckyValue = Game.cookies
-	luckyBankTarget = Game.cookiesPsRaw * 6000
-	frenzyBankTarget = luckyBankTarget * 7
 
 	Game.shimmers.forEach(function(shimmer) {
 		shimmer.pop()
@@ -178,7 +200,14 @@ function logic_loop()
             Game.Objects['Bank']['minigame'].buyGood(good.id, 1)
         }
     }
+	
+	Wrinklers stuff
+	if have max Wrinklers
+		sort wrinklers by reward
+		pop most valuable wrinkler
 	*/
+	
+	
 
 	if (Game.Achievements['Neverclick'].won == 1) {
 		if (Game.UpgradesByPool['prestige'][78].bought == 0) { 
@@ -196,21 +225,7 @@ function logic_loop()
     	thisItem = nextItem
     }
 	
-	if ((Game.Upgrades["Lucky day"].bought == 0) || (Game.Upgrades["Serendipity"].bought == 0)) {
-		if (Game.hasBuff('Frenzy') == 0) {
-			nextItem = unbankedBuy(thisItem)
-		//	console.log("simple mode")
-		}
-	} else {
-		if (Game.Upgrades["One mind"].bought == 0) {
-			nextItem = bankedBuy(luckyValue, luckyBankTarget, thisItem)
-		//	console.log("lucky mode")
-		}
-		else {
-			nextBuilding = bankedBuy(luckyValue, frenzyBankTarget, thisItem)
-		//	console.log("frenzy lucky mode")
-		}
-	}
+	nextItem = bankedBuy(luckyValue, thisItem)
 }
 
 setInterval(function() {
