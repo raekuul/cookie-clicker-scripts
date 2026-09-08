@@ -1,5 +1,5 @@
 loopsPerSecond = 10
-presetSpellString = 'hand of fate'
+presetSpellString = "gambler's fever dream"
 
 Grimoire = Game.Objects['Wizard tower'].minigame
 try {
