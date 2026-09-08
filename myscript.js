@@ -1,19 +1,49 @@
-loopsPerSecond = 20
-Grimoire = Game.Objects['Wizard tower'].minigame
-preset_spell = Grimoire.spells['hand of fate']
-pantheon = Game.Objects['Temple'].minigame
+loopsPerSecond = 10
+presetSpellString = 'hand of fate'
 
-Game.Popup=function(text,x,y)
-{
-	if (Game.popups) Game.textParticlesAdd(text,0,x,y);
-	console.log(cleanupShimmerTextForLog(text))
+Grimoire = Game.Objects['Wizard tower'].minigame
+try {
+	preset_spell = Grimoire.spells[presetSpellString]
+} catch {
+	console.error("Grimoire not unlocked!")
+	preset_spell = null
 }
+pantheon = Game.Objects['Temple'].minigame
 
 function cleanupShimmerTextForLog(input){
 	output = input.replace('<br>', '\n')
 	output = output.replace('<div style="font-size:65%;">', '\n')
 	output = output.replace(/(<([^>]+)>)/gi, "")
 	return '\n'.concat(output,'\n')
+}
+
+function determineNextPurchase() {
+	out = Game.ObjectsById[0]
+	building = determineNextBuilding()
+	if ((Game.UpgradesOwned > 0) || (Game.Achievements['Hardcore'].won == 1)) {
+		stack = getBuildingStackSize(building)
+		upgrade = determineNextUpgrade()
+		if (upgrade == -1) {
+			out = Game.ObjectsById[building.id]
+		} else if (upgrade.getPrice() < building.getSumPrice(stack)) {
+			out = Game.UpgradesById[upgrade.id]
+		} else {
+			out = Game.ObjectsById[building.id]
+		}
+	} else {
+		out = Game.ObjectsById[building.id]
+	}
+	reportNextPurchase(out)
+	return out
+}
+
+nextItem = determineNextPurchase()
+
+Game.Popup=function(text,x,y)
+{
+	if (Game.popups) Game.textParticlesAdd(text,0,x,y);
+	console.log(cleanupShimmerTextForLog(text))
+	nextItem = determineNextPurchase()
 }
 
 function calculatePaybackPeriod(building) {
@@ -154,28 +184,6 @@ function reportNextPurchase(item) {
 	console.log("\nNext: ".concat(item.name, " costs ", price.toExponential(3), " cookies (",costInDollars, ").\nBank carries ",Game.cookies.toExponential(3)," cookies.  Bank target (",bankThreshold.toExponential(3),") reached in ", timeToNext, ".\nCurrent Prestige Increase: ",prestigeDelta, ".\n"))
 }
 
-function determineNextPurchase() {
-	out = Game.ObjectsById[0]
-	building = determineNextBuilding()
-	if ((Game.UpgradesOwned > 0) || (Game.Achievements['Hardcore'].won == 1)) {
-		stack = getBuildingStackSize(building)
-		upgrade = determineNextUpgrade()
-		if (upgrade == -1) {
-			out = Game.ObjectsById[building.id]
-		} else if (upgrade.getPrice() < building.getSumPrice(stack)) {
-			out = Game.UpgradesById[upgrade.id]
-		} else {
-			out = Game.ObjectsById[building.id]
-		}
-	} else {
-		out = Game.ObjectsById[building.id]
-	}
-	reportNextPurchase(out)
-	return out
-}
-
-nextItem = determineNextPurchase()
-
 function bankedBuy(bankValue, item) {
 	target = calculateBankOffset()
 	if (item.getSumPrice == undefined) {
@@ -185,7 +193,7 @@ function bankedBuy(bankValue, item) {
 		price = item.getSumPrice(stack)
 	}
 	
-	if (price < (Game.cookiesPsRaw)) {
+	if (price < (Game.cookiesPsRaw / loopsPerSecond)) {
 		try {
 			item.click()
 		} catch {
@@ -250,49 +258,93 @@ function calculatePrestigeDelta() {
 	}
 }
 
+function canClickBigCookie() {
+	if (Game.Achievements['Neverclick'].won == 1) {
+		if (Game.UpgradesByPool['prestige'][78].bought == 0) { 
+				return true
+			} else {
+			if (Game.UpgradesByPool['toggle'][14].bought == 0) {
+				return true
+			} else { 
+				return false
+			}
+		}
+	} else {
+		return false
+	}
+}
+
+function buyBargainStocks() {
+	output = false
+	market = Game.Objects['Bank'].minigame
+	
+	market.goodsById.forEach(function(good){
+		maxStock = market.getGoodMaxStock(good)
+		if ((good.val == 1) && (maxStock > good.stock) && (Game.cookies > (calculateBankOffset()))) {
+			market.buyGood(good.id,1)
+			output = true
+		}
+	})
+		
+	return output
+}
+
+function clickGoldenSwitch() {
+	
+}
+
 function logic_loop()
 {
+	didBankStuff = false
 	luckyValue = Game.cookies
 	
 	// update shimmer logic: if not holobore, then click all shimmers
 
-	if (canCastSpell() == true) {
+	if ((preset_spell != null) && (canCastSpell() == true)) {
 		Grimoire.castSpell(preset_spell)
 	}
 
 	Game.shimmers.forEach(function(shimmer) {
 		shimmer.pop()
-        nextItem = determineNextPurchase()
 	})
-	
-    /* Bank stuff
-    Game.Objects['Bank']['minigame']['goods'].forEach(function(good) {
-        if (good.val == 1) {
-            Game.Objects['Bank']['minigame'].buyGood(good.id, 1)
-        }
-    }
-	
+		
+	/* 
 	Wrinklers stuff
 	if have max Wrinklers
 		sort wrinklers by reward
 		pop most valuable wrinkler
-	*/
-	
-	if (Game.Achievements['Neverclick'].won == 1) {
-		if (Game.UpgradesByPool['prestige'][78].bought == 0) { 
-				Game.ClickCookie()
-			} else {
-			if (Game.UpgradesByPool['toggle'][14].bought == 0) {
-				Game.ClickCookie()
+		
+	Golden Switch stuff
+		if (GoldenSwitch) {
+			if ((Game.cookiesPsRaw >= Game.cookiesPs) && !((Click Frenzy) || (Cursed Finger)) {
+				clickGoldenSwitch()
+			}
+		} else if !(Golden Switch) {
+			if ((Click Frenzy) || (Cursed Finger)) {
+				clickGoldenSwitch
 			}
 		}
+			
+	*/
+	
+	if (canClickBigCookie()) {
+		Game.ClickCookie()
 	} 
-	if (Game.ObjectsById[0].count < 20) {
-		thisItem = Game.ObjectsById[0]
-	} else {
-		thisItem = nextItem
+	
+	if (!(Game.Objects['Bank'].amount == 0) && !(Game.Objects['Bank'].level == 0)) {
+		didBankStuff = buyBargainStocks()
 	}
-	nextItem = bankedBuy(luckyValue, thisItem)
+	
+	if (didBankStuff == true) {
+		console.log("Purchased stocks this tick!  Not buying buildings/upgrades.")
+	} else {
+		if (Game.ObjectsById[0].count < 20) {
+			thisItem = Game.ObjectsById[0]
+		} else {
+			thisItem = nextItem
+		}
+		nextItem = bankedBuy(luckyValue, thisItem)
+	}
 }
 
 setInterval(function() {
