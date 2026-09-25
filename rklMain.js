@@ -1,6 +1,7 @@
-loopsPerSecond = 10
-presetSpellString = "gambler's fever dream"
-
+loopsPerSecond = 20
+// useful preset spells: 'hand of fate', "gambler's fever dream", 'conjure baked goods', 'resurrect abomination'
+presetSpellString = "hand of fate"
+didBankStuff = null
 Grimoire = Game.Objects['Wizard tower'].minigame
 try {
 	preset_spell = Grimoire.spells[presetSpellString]
@@ -15,6 +16,26 @@ function cleanupShimmerTextForLog(input){
 	output = output.replace('<div style="font-size:65%;">', '\n')
 	output = output.replace(/(<([^>]+)>)/gi, "")
 	return '\n'.concat(output,'\n')
+}
+
+function dynamicStackSize(building) {
+	stack = 101
+	do {
+		stack = stack - 1
+	} while ((Game.cookiesPs * 60 < building.getSumPrice(stack)) && (stack > 1))
+	if (stack > 1) {	
+		return stack
+	} else {
+		return 1
+	}
+}
+
+function getBuildingStackSize(building) {
+	if (isRigidelSlotted()) {
+		return (10 - (building.amount % 10))
+	} else {
+		return dynamicStackSize(building)
+	}
 }
 
 function determineNextPurchase() {
@@ -39,10 +60,9 @@ function determineNextPurchase() {
 
 nextItem = determineNextPurchase()
 
-Game.Popup=function(text,x,y)
-{
-	if (Game.popups) Game.textParticlesAdd(text,0,x,y);
-	console.log(cleanupShimmerTextForLog(text))
+Game.Popup=function(inputText,x,y) {
+	if (Game.popups) Game.textParticlesAdd(inputText,0,x,y);
+	console.log(cleanupShimmerTextForLog(inputText))
 	nextItem = determineNextPurchase()
 }
 
@@ -60,6 +80,7 @@ function calculatePaybackPeriod(building) {
 }
 
 function upgradeIsEligible(upgrade) {
+	// TODO:  exclude Chocolate Egg
 	if (Game.vault.includes(upgrade.id)) {
 		return false
 	} else {
@@ -75,17 +96,32 @@ function calculateBankOffset() {
 	cps = Math.max(Game.cookiesPsRaw,1)
 		
 	if ((Game.Upgrades["Lucky day"].bought == 0) || (Game.Upgrades["Serendipity"].bought == 0)) {
-		//console.log("bank offset is in simple mode")
 		return cps
 	} else {
 		if (Game.Upgrades["One mind"].bought == 0) {
-			//console.log("bank offset is in lucky mode")
 			return cps * 6000
 		}
 		else {
-			//console.log("bank offset is in frenzy lucky mode")
 			return cps * 42000
 		}
+	}
+}
+
+function whenFullPopWrinkler() {
+	var wrinklerValues = []
+	Game.wrinklers.forEach(function(wrinkler) {
+		if (wrinkler.phase == 2) {
+			if (!(wrinkler.type == 0)) {
+				wrinklerValues.push({id: wrinkler.id, value: wrinkler.sucked / 100, type: wrinkler.type})
+			} else {
+				wrinklerValues.push({id: wrinkler.id, value: wrinkler.sucked, type: wrinkler.type})
+			}	
+		}
+	})
+	if (wrinklerValues.length == Game.getWrinklersMax()) {
+		return Game.PopRandomWrinkler()
+	} else {
+		return -1
 	}
 }
 
@@ -168,7 +204,12 @@ function determineNextBuilding() {
 	}
 }
 
+function valueInDollars(value) {
+	return "$".concat((value / Game.cookiesPsRawHighest).toFixed(2))
+}
+
 function reportNextPurchase(item) {
+	bankInDollars = valueInDollars(Game.cookies)
 	if (item.getSumPrice == undefined) {
 		price = item.getPrice()
 	} else {
@@ -178,10 +219,11 @@ function reportNextPurchase(item) {
 	prestigeDelta = calculatePrestigeDelta()
 	bankOffset = calculateBankOffset()
 	costInTime = convertSecondsToClock(Math.ceil(price / Game.cookiesPsRaw))
-    costInDollars = "$".concat((price / Game.cookiesPsRawHighest).toFixed(2))
+    costInDollars = valueInDollars(price)
 	bankThreshold = price + bankOffset
+	bankThresholdInDollars = valueInDollars(bankThreshold)
 	timeToNext = convertSecondsToClock(Math.ceil((bankThreshold - Game.cookies)/Game.cookiesPs))
-	console.log("\nNext: ".concat(item.name, " costs ", price.toExponential(3), " cookies (",costInDollars, ").\nBank carries ",Game.cookies.toExponential(3)," cookies.  Bank target (",bankThreshold.toExponential(3),") reached in ", timeToNext, ".\nCurrent Prestige Increase: ",prestigeDelta, ".\n"))
+	console.log("\nNext: ".concat(item.name, " costs ", price.toExponential(3), " cookies (",costInDollars, ").\nBank carries ",Game.cookies.toExponential(3)," (",bankInDollars,") cookies.  Bank target ",bankThreshold.toExponential(3)," (",bankThresholdInDollars,") reached in ", timeToNext, ".\nCurrent Prestige Increase: ",prestigeDelta, ".\n"))
 }
 
 function bankedBuy(bankValue, item) {
@@ -193,18 +235,18 @@ function bankedBuy(bankValue, item) {
 		price = item.getSumPrice(stack)
 	}
 	
-	if (price < (Game.cookiesPsRaw / loopsPerSecond)) {
+	if (price < (Game.cookiesPsRaw)) {
 		try {
-			item.click()
-		} catch {
 			item.buy(stack)
+		} catch {
+			item.click()
 		}
 		next = determineNextPurchase()
 	} else if ((bankValue - price) >= target) {
 		try {
-			item.click()
-		} catch {
 			item.buy(stack)
+		} catch {
+			item.click()
 		}
 		next = determineNextPurchase()
 	} else {
@@ -213,16 +255,8 @@ function bankedBuy(bankValue, item) {
 	return next
 }
 
-function getBuildingStackSize(building) {
-	if (isRigidelSlotted()) {
-		return (10 - (building.amount % 10))
-	} else {
-		return 1
-	}
-}
-
 function canCastSpell() {
-	if ((Game.Objects['Wizard tower'].amount == 0) || (Game.Objects['Wizard tower'].level == 0)) {
+	if ((Game.Objects['Wizard tower'].amount < 25) || (Game.Objects['Wizard tower'].level == 0)) {
 		return false
 	} else {
 		return (Grimoire.magic == Grimoire.magicM)
@@ -235,10 +269,6 @@ function isRigidelSlotted() {
 	} else {
 		return (pantheon.slot.includes(10))
 	}
-}
-
-function getMaxWrinklerCount() {
-	return (10 + (2 * Game.Upgrades['Elder Spice'].unlocked) + (2 * ((Game.dragonAura == 21) || (Game.dragonAura2 == 21))))
 }
 
 function calculatePrestigeDelta() {
@@ -290,30 +320,7 @@ function buyBargainStocks() {
 }
 
 function clickGoldenSwitch() {
-	
-}
-
-function logic_loop()
-{
-	didBankStuff = false
-	luckyValue = Game.cookies
-	
-	// update shimmer logic: if not holobore, then click all shimmers
-
-	if ((preset_spell != null) && (canCastSpell() == true)) {
-		Grimoire.castSpell(preset_spell)
-	}
-
-	Game.shimmers.forEach(function(shimmer) {
-		shimmer.pop()
-	})
-		
-	/* 
-	Wrinklers stuff
-	if have max Wrinklers
-		sort wrinklers by reward
-		pop most valuable wrinkler
-		
+	/* 	
 	Golden Switch stuff
 		if (GoldenSwitch) {
 			if ((Game.cookiesPsRaw >= Game.cookiesPs) && !((Click Frenzy) || (Cursed Finger)) {
@@ -326,19 +333,33 @@ function logic_loop()
 		}
 			
 	*/
+}
+
+function logic_loop()
+{
+	didBankStuff = false
+	luckyValue = Game.cookies
+
+	if ((preset_spell != null) && (canCastSpell() == true)) {
+		Grimoire.castSpell(preset_spell)
+	}
+
+	//TODO:  Check if not Holobore
+	Game.shimmers.forEach(function(shimmer) {
+		//TODO:  delay until the last 1000 ms 
+		shimmer.pop()
+	})
 	
-	if (canClickBigCookie()) {
-		Game.ClickCookie()
-	} 
+	squishy = whenFullPopWrinkler()
 	
-	if (!(Game.Objects['Bank'].amount == 0) && !(Game.Objects['Bank'].level == 0)) {
-		didBankStuff = buyBargainStocks()
+	if (!(Game.TickerEffect == 0)) {
+		Game.tickerL.click()
 	}
 	
 	if (didBankStuff == true) {
 		console.log("Purchased stocks this tick!  Not buying buildings/upgrades.")
 	} else {
-		if (Game.ObjectsById[0].count < 20) {
+		if (Game.ObjectsById[0].count < 10) {
 			thisItem = Game.ObjectsById[0]
 		} else {
 			thisItem = nextItem
@@ -349,4 +370,13 @@ function logic_loop()
 
 setInterval(function() {
 	logic_loop()
+}, 1000);
+
+setInterval(function() {
+	if (canClickBigCookie()) {
+		Game.ClickCookie()
+	} 
+	if (!(Game.Objects['Bank'].amount == 0) && !(Game.Objects['Bank'].level == 0)) {
+		didBankStuff = buyBargainStocks()
+	}
 }, (1000 / loopsPerSecond));
